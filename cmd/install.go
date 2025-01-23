@@ -7,6 +7,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -27,7 +28,7 @@ func setupInstallCommand() *cobraext.Command {
 		Use:   "install",
 		Short: "Install the package",
 		Long:  installLongDescription,
-		Args:  cobra.NoArgs,
+		Args:  cobra.RangeArgs(0, 1),
 		RunE:  installCommandAction,
 	}
 	cmd.Flags().StringSliceP(cobraext.CheckConditionFlagName, "c", nil, cobraext.CheckConditionFlagDescription)
@@ -40,7 +41,7 @@ func setupInstallCommand() *cobraext.Command {
 	return cobraext.NewCommand(cmd, cobraext.ContextPackage)
 }
 
-func installCommandAction(cmd *cobra.Command, _ []string) error {
+func installCommandAction(cmd *cobra.Command, args []string) error {
 	zipPathFile, err := cmd.Flags().GetString(cobraext.ZipPackageFilePathFlagName)
 	if err != nil {
 		return cobraext.FlagParsingError(err, cobraext.ZipPackageFilePathFlagName)
@@ -68,6 +69,18 @@ func installCommandAction(cmd *cobra.Command, _ []string) error {
 	kibanaClient, err := stack.NewKibanaClientFromProfile(profile, opts...)
 	if err != nil {
 		return fmt.Errorf("could not create kibana client: %w", err)
+	}
+
+	if len(args) != 0 {
+		tempdir, err := os.MkdirTemp("", "elastic-package")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(tempdir)
+		if err := pullPackage(cmd.Context(), args[0], tempdir); err != nil {
+			return err
+		}
+		packageRootPath = tempdir
 	}
 
 	if zipPathFile == "" && packageRootPath == "" {
